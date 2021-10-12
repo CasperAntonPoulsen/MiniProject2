@@ -1,0 +1,17 @@
+
+syntax = "proto3";
+
+option go_package = "github.com/CasperAntonPoulsen/MiniProject2";
+
+package proto
+
+service ChittyChat {
+    rpc BroadcastMessage(Message) returns (Message) {}
+
+    rpc PublishMessage(Message) returns (Message) {}
+}
+
+message Message {
+    required string chatmessage = 1;
+    repeated int32 logicaltimes = 2;
+}
