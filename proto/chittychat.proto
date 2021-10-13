@@ -3,15 +3,41 @@ syntax = "proto3";
 
 option go_package = "github.com/CasperAntonPoulsen/MiniProject2";
 
-package proto
+package proto;
 
-service ChittyChat {
-    rpc BroadcastMessage(Message) returns (Message) {}
 
-    rpc PublishMessage(Message) returns (Message) {}
+message ChatMessage {
+    string from = 1;
+    string chatmessage = 2;
+    repeated int32 logicaltimes = 3;
 }
 
-message Message {
-    required string chatmessage = 1;
-    repeated int32 logicaltimes = 2;
+message User {
+    string id = 1;
+    string name = 2;
+}
+
+message Empty {}
+
+message UserList {
+    repeated User users = 1;
+}
+
+message JoinResponse {
+    int32 error = 1;
+    string msg = 2;
+}
+
+message ReceiveMsgRequest {
+    string user = 1;
+}
+
+service ChittyChat {
+    rpc join(User) returns (JoinResponse) {}
+
+    rpc sendMsg(ChatMessage) returns (Empty) {}
+
+    rpc receiveMsg(Empty) returns (stream ChatMessage) {}
+
+    rpc getAllUsers(Empty) returns (UserList) {}
 }
