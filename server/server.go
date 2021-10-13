@@ -16,9 +16,8 @@ type chittyChatServer struct {
 	pb.UnimplementedChittyChatServer
 	usersInChat []*pb.User
 	observers   []pb.ChittyChat_ReceiveMsgServer
+	clocks      []int32
 }
-
-var clocks []int32
 
 func (s *chittyChatServer) Join(ctx context.Context, user *pb.User) (*pb.JoinResponse, error) {
 	for _, _user := range s.usersInChat {
