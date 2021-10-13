@@ -35,16 +35,16 @@ func (s *chittyChatServer) Join(ctx context.Context, user *pb.User) (*pb.JoinRes
 		nil
 }
 
-func (s *chittyChatServer) getAllUsers(ctx context.Context, empty *pb.Empty) (*pb.UserList, error) {
+func (s *chittyChatServer) GetAllUsers(ctx context.Context, empty *pb.Empty) (*pb.UserList, error) {
 	return &pb.UserList{Users: s.usersInChat}, nil
 }
 
-func (s *chittyChatServer) receiveMsg(empty *pb.Empty, stream pb.ChittyChat_ReceiveMsgServer) error {
+func (s *chittyChatServer) ReceiveMsg(empty *pb.Empty, stream pb.ChittyChat_ReceiveMsgServer) error {
 	s.observers = append(s.observers, stream)
 	return nil
 }
 
-func (s *chittyChatServer) sendMsg(ctx context.Context, chatMessage *pb.ChatMessage) (*pb.Empty, error) {
+func (s *chittyChatServer) SendMsg(ctx context.Context, chatMessage *pb.ChatMessage) (*pb.Empty, error) {
 	for _, observer := range s.observers {
 		observer.Send(chatMessage)
 	}
@@ -59,6 +59,7 @@ func main() {
 	}
 	s := grpc.NewServer()
 	pb.RegisterChittyChatServer(s, &chittyChatServer{})
+	log.Printf("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
