@@ -19,32 +19,34 @@ var (
 	logictime []int32
 )
 
-func receiveMessages(client pb.ChittyChatClient) {
-	cs, err := client.ReceiveMsg(context.Background(), &pb.Empty{})
+func receiveMessages(ctx context.Context, client pb.ChittyChatClient) {
+	cs, err := client.ReceiveMsg(ctx, &pb.Empty{})
 	if err != nil {
 		log.Fatalf("%v.ReceiveMsg(_) = _, %v", client, err)
 	}
 
 	for {
 		message, err := cs.Recv()
+
 		if err == nil {
-			log.Printf("%v: %v", message.GetFrom(), message.GetChatmessage())
+			log.Print(message)
+			//log.Printf("%v: %v", message.GetFrom(), message.GetChatmessage())
 		}
 	}
 
 }
 
-func sendMessages(client pb.ChittyChatClient) {
+func sendMessages(ctx context.Context, client pb.ChittyChatClient) {
 	for {
 		var msg string
 		fmt.Scanln(&msg)
-
-		client.SendMsg(context.Background(), &pb.ChatMessage{From: name, Chatmessage: msg, Logicaltimes: logictime})
+		log.Print("This message was read: " + msg)
+		client.SendMsg(ctx, &pb.ChatMessage{From: name, Chatmessage: msg, Logicaltimes: logictime})
 	}
 }
 
 func main() {
-
+	ctx := context.Background()
 	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
@@ -57,11 +59,25 @@ func main() {
 	fmt.Scanln(&name)
 	clientId = "5"
 
-	j, err := c.Join(context.Background(), &pb.User{Id: clientId, Name: name})
+	j, err := c.Join(ctx, &pb.User{Id: clientId, Name: name})
 
 	log.Print(j, err)
 
-	go receiveMessages(c)
-	go sendMessages(c)
+	users, _ := c.GetAllUsers(ctx, &pb.Empty{})
+
+	log.Print(users)
+
+	go receiveMessages(ctx, c)
+	go sendMessages(ctx, c)
+
+	for {
+
+	}
 
 }
+
+// x := 15
+
+//a := &x memory address 0x...
+
+//b := *x værdien af x

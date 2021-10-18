@@ -15,7 +15,7 @@ const port = ":8080"
 type chittyChatServer struct {
 	pb.UnimplementedChittyChatServer
 	usersInChat []*pb.User
-	observers   []pb.ChittyChat_ReceiveMsgServer
+	observers   []pb.ChittyChat_ReceiveMsgServer //gRPC server stream
 	clocks      []int32
 }
 
@@ -38,14 +38,18 @@ func (s *chittyChatServer) GetAllUsers(ctx context.Context, empty *pb.Empty) (*p
 	return &pb.UserList{Users: s.usersInChat}, nil
 }
 
-func (s *chittyChatServer) ReceiveMsg(empty *pb.Empty, stream pb.ChittyChat_ReceiveMsgServer) error {
+func (s *chittyChatServer) ReceiveMsg(empty *pb.Empty, stream pb.ChittyChat_ReceiveMsgServer) error { //recive msg from client
 	s.observers = append(s.observers, stream)
 	return nil
 }
 
-func (s *chittyChatServer) SendMsg(ctx context.Context, chatMessage *pb.ChatMessage) (*pb.Empty, error) {
+func (s *chittyChatServer) SendMsg(ctx context.Context, chatMessage *pb.ChatMessage) (*pb.Empty, error) { //send all chat msgs to clients
+	log.Print(len(s.observers))
 	for _, observer := range s.observers {
-		observer.Send(chatMessage)
+
+		err := observer.Send(chatMessage)
+		log.Print(err)
+		log.Print(chatMessage)
 	}
 	return &pb.Empty{}, nil
 }
@@ -62,4 +66,5 @@ func main() {
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+
 }
