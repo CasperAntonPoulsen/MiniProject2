@@ -18,10 +18,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ChittyChatClient interface {
-	Join(ctx context.Context, in *User, opts ...grpc.CallOption) (*JoinResponse, error)
-	SendMsg(ctx context.Context, in *ChatMessage, opts ...grpc.CallOption) (*Empty, error)
-	ReceiveMsg(ctx context.Context, in *Empty, opts ...grpc.CallOption) (ChittyChat_ReceiveMsgClient, error)
-	GetAllUsers(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*UserList, error)
+	CreateStream(ctx context.Context, in *Connect, opts ...grpc.CallOption) (ChittyChat_CreateStreamClient, error)
+	BroadcastMessage(ctx context.Context, in *ChatMessage, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type chittyChatClient struct {
@@ -32,30 +30,12 @@ func NewChittyChatClient(cc grpc.ClientConnInterface) ChittyChatClient {
 	return &chittyChatClient{cc}
 }
 
-func (c *chittyChatClient) Join(ctx context.Context, in *User, opts ...grpc.CallOption) (*JoinResponse, error) {
-	out := new(JoinResponse)
-	err := c.cc.Invoke(ctx, "/proto.ChittyChat/join", in, out, opts...)
+func (c *chittyChatClient) CreateStream(ctx context.Context, in *Connect, opts ...grpc.CallOption) (ChittyChat_CreateStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &ChittyChat_ServiceDesc.Streams[0], "/proto.ChittyChat/CreateStream", opts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
-}
-
-func (c *chittyChatClient) SendMsg(ctx context.Context, in *ChatMessage, opts ...grpc.CallOption) (*Empty, error) {
-	out := new(Empty)
-	err := c.cc.Invoke(ctx, "/proto.ChittyChat/sendMsg", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *chittyChatClient) ReceiveMsg(ctx context.Context, in *Empty, opts ...grpc.CallOption) (ChittyChat_ReceiveMsgClient, error) {
-	stream, err := c.cc.NewStream(ctx, &ChittyChat_ServiceDesc.Streams[0], "/proto.ChittyChat/receiveMsg", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &chittyChatReceiveMsgClient{stream}
+	x := &chittyChatCreateStreamClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -65,16 +45,16 @@ func (c *chittyChatClient) ReceiveMsg(ctx context.Context, in *Empty, opts ...gr
 	return x, nil
 }
 
-type ChittyChat_ReceiveMsgClient interface {
+type ChittyChat_CreateStreamClient interface {
 	Recv() (*ChatMessage, error)
 	grpc.ClientStream
 }
 
-type chittyChatReceiveMsgClient struct {
+type chittyChatCreateStreamClient struct {
 	grpc.ClientStream
 }
 
-func (x *chittyChatReceiveMsgClient) Recv() (*ChatMessage, error) {
+func (x *chittyChatCreateStreamClient) Recv() (*ChatMessage, error) {
 	m := new(ChatMessage)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -82,9 +62,9 @@ func (x *chittyChatReceiveMsgClient) Recv() (*ChatMessage, error) {
 	return m, nil
 }
 
-func (c *chittyChatClient) GetAllUsers(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*UserList, error) {
-	out := new(UserList)
-	err := c.cc.Invoke(ctx, "/proto.ChittyChat/getAllUsers", in, out, opts...)
+func (c *chittyChatClient) BroadcastMessage(ctx context.Context, in *ChatMessage, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/proto.ChittyChat/BroadcastMessage", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -95,10 +75,8 @@ func (c *chittyChatClient) GetAllUsers(ctx context.Context, in *Empty, opts ...g
 // All implementations must embed UnimplementedChittyChatServer
 // for forward compatibility
 type ChittyChatServer interface {
-	Join(context.Context, *User) (*JoinResponse, error)
-	SendMsg(context.Context, *ChatMessage) (*Empty, error)
-	ReceiveMsg(*Empty, ChittyChat_ReceiveMsgServer) error
-	GetAllUsers(context.Context, *Empty) (*UserList, error)
+	CreateStream(*Connect, ChittyChat_CreateStreamServer) error
+	BroadcastMessage(context.Context, *ChatMessage) (*Empty, error)
 	mustEmbedUnimplementedChittyChatServer()
 }
 
@@ -106,17 +84,11 @@ type ChittyChatServer interface {
 type UnimplementedChittyChatServer struct {
 }
 
-func (UnimplementedChittyChatServer) Join(context.Context, *User) (*JoinResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Join not implemented")
+func (UnimplementedChittyChatServer) CreateStream(*Connect, ChittyChat_CreateStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method CreateStream not implemented")
 }
-func (UnimplementedChittyChatServer) SendMsg(context.Context, *ChatMessage) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SendMsg not implemented")
-}
-func (UnimplementedChittyChatServer) ReceiveMsg(*Empty, ChittyChat_ReceiveMsgServer) error {
-	return status.Errorf(codes.Unimplemented, "method ReceiveMsg not implemented")
-}
-func (UnimplementedChittyChatServer) GetAllUsers(context.Context, *Empty) (*UserList, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetAllUsers not implemented")
+func (UnimplementedChittyChatServer) BroadcastMessage(context.Context, *ChatMessage) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BroadcastMessage not implemented")
 }
 func (UnimplementedChittyChatServer) mustEmbedUnimplementedChittyChatServer() {}
 
@@ -131,77 +103,41 @@ func RegisterChittyChatServer(s grpc.ServiceRegistrar, srv ChittyChatServer) {
 	s.RegisterService(&ChittyChat_ServiceDesc, srv)
 }
 
-func _ChittyChat_Join_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(User)
-	if err := dec(in); err != nil {
-		return nil, err
+func _ChittyChat_CreateStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Connect)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(ChittyChatServer).Join(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.ChittyChat/join",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ChittyChatServer).Join(ctx, req.(*User))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(ChittyChatServer).CreateStream(m, &chittyChatCreateStreamServer{stream})
 }
 
-func _ChittyChat_SendMsg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+type ChittyChat_CreateStreamServer interface {
+	Send(*ChatMessage) error
+	grpc.ServerStream
+}
+
+type chittyChatCreateStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *chittyChatCreateStreamServer) Send(m *ChatMessage) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _ChittyChat_BroadcastMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ChatMessage)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ChittyChatServer).SendMsg(ctx, in)
+		return srv.(ChittyChatServer).BroadcastMessage(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.ChittyChat/sendMsg",
+		FullMethod: "/proto.ChittyChat/BroadcastMessage",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ChittyChatServer).SendMsg(ctx, req.(*ChatMessage))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ChittyChat_ReceiveMsg_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(Empty)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(ChittyChatServer).ReceiveMsg(m, &chittyChatReceiveMsgServer{stream})
-}
-
-type ChittyChat_ReceiveMsgServer interface {
-	Send(*ChatMessage) error
-	grpc.ServerStream
-}
-
-type chittyChatReceiveMsgServer struct {
-	grpc.ServerStream
-}
-
-func (x *chittyChatReceiveMsgServer) Send(m *ChatMessage) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _ChittyChat_GetAllUsers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ChittyChatServer).GetAllUsers(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/proto.ChittyChat/getAllUsers",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ChittyChatServer).GetAllUsers(ctx, req.(*Empty))
+		return srv.(ChittyChatServer).BroadcastMessage(ctx, req.(*ChatMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -214,22 +150,14 @@ var ChittyChat_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ChittyChatServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "join",
-			Handler:    _ChittyChat_Join_Handler,
-		},
-		{
-			MethodName: "sendMsg",
-			Handler:    _ChittyChat_SendMsg_Handler,
-		},
-		{
-			MethodName: "getAllUsers",
-			Handler:    _ChittyChat_GetAllUsers_Handler,
+			MethodName: "BroadcastMessage",
+			Handler:    _ChittyChat_BroadcastMessage_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "receiveMsg",
-			Handler:       _ChittyChat_ReceiveMsg_Handler,
+			StreamName:    "CreateStream",
+			Handler:       _ChittyChat_CreateStream_Handler,
 			ServerStreams: true,
 		},
 	},

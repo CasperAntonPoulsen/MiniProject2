@@ -1,9 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"flag"
 	"fmt"
 	"log"
+	"os"
+	"sync"
+	"time"
 
 	pb "github.com/CasperAntonPoulsen/MiniProject2/proto"
 	"google.golang.org/grpc"
@@ -13,71 +20,84 @@ const (
 	address = "localhost:8080"
 )
 
-var (
-	clientId  string
-	name      string
-	logictime []int32
-)
+var client pb.ChittyChatClient
+var wait *sync.WaitGroup
 
-func receiveMessages(ctx context.Context, client pb.ChittyChatClient) {
-	cs, err := client.ReceiveMsg(ctx, &pb.Empty{})
-	if err != nil {
-		log.Fatalf("%v.ReceiveMsg(_) = _, %v", client, err)
-	}
-
-	for {
-		message, err := cs.Recv()
-
-		if err == nil {
-			log.Print(message)
-			//log.Printf("%v: %v", message.GetFrom(), message.GetChatmessage())
-		}
-	}
-
+func init() {
+	wait = &sync.WaitGroup{}
 }
 
-func sendMessages(ctx context.Context, client pb.ChittyChatClient) {
-	for {
-		var msg string
-		fmt.Scanln(&msg)
-		log.Print("This message was read: " + msg)
-		client.SendMsg(ctx, &pb.ChatMessage{From: name, Chatmessage: msg, Logicaltimes: logictime})
+func connect(user *pb.User) error {
+	var streamerror error
+	stream, err := client.CreateStream(context.Background(), &pb.Connect{
+		User:   user,
+		Active: true,
+	})
+	if err != nil {
+		return fmt.Errorf("connection has failed: %v", err)
 	}
+	wait.Add(1)
+	go func(str pb.ChittyChat_CreateStreamClient) {
+		defer wait.Done()
+		for {
+			msg, err := str.Recv()
+			if err != nil {
+				streamerror = fmt.Errorf("error reading message: %v", err)
+				break
+			}
+			fmt.Printf("%v %v : %s : %v\n", msg.Id, msg.From, msg.Chatmessage, msg.GetLogicaltimes())
+		}
+	}(stream)
+	return streamerror
 }
 
 func main() {
-	ctx := context.Background()
-	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
+	timestamp := time.Now()
+	done := make(chan int)
+
+	name := flag.String("Name", "Anon", "The name of the user")
+	flag.Parse()
+
+	id := sha256.Sum256([]byte(timestamp.String() + *name))
+
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
+
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
-	}
-	defer conn.Close()
-	c := pb.NewChittyChatClient(conn)
-
-	fmt.Println("Enter your name: ")
-
-	fmt.Scanln(&name)
-	clientId = "5"
-
-	j, err := c.Join(ctx, &pb.User{Id: clientId, Name: name})
-
-	log.Print(j, err)
-
-	users, _ := c.GetAllUsers(ctx, &pb.Empty{})
-
-	log.Print(users)
-
-	go receiveMessages(ctx, c)
-	go sendMessages(ctx, c)
-
-	for {
-
+		log.Fatalf("could not connect to service : %v", err)
 	}
 
+	client = pb.NewChittyChatClient(conn)
+	user := &pb.User{
+		Id:   hex.EncodeToString(id[:]),
+		Name: *name,
+	}
+
+	connect(user)
+
+	wait.Add(1)
+	go func() {
+		defer wait.Done()
+
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			msg := &pb.ChatMessage{
+				Id:          user.Id,
+				From:        user.Name,
+				Chatmessage: scanner.Text(),
+			}
+
+			_, err := client.BroadcastMessage(context.Background(), msg)
+			if err != nil {
+				fmt.Printf("error sending message: %v", err)
+				break
+			}
+		}
+	}()
+
+	go func() {
+		wait.Wait()
+		close(done)
+	}()
+
+	<-done
 }
-
-// x := 15
-
-//a := &x memory address 0x...
-
-//b := *x værdien af x
