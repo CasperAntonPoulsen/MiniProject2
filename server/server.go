@@ -4,67 +4,80 @@ import (
 	"context"
 	"log"
 	"net"
-
-	"google.golang.org/grpc"
+	"sync"
 
 	pb "github.com/CasperAntonPoulsen/MiniProject2/proto"
+	"google.golang.org/grpc"
 )
 
 const port = ":8080"
 
-type chittyChatServer struct {
+type Connection struct { // Creating a struct to contain each connection from clients
+	stream pb.ChittyChat_CreateStreamServer // Each connection contains a stream object which is used to send the message during the broadcast function
+	id     string
+	active bool // A bool used to check if a connection is still active
+	error  chan error
+}
+
+type Server struct {
 	pb.UnimplementedChittyChatServer
-	usersInChat []*pb.User
-	observers   []pb.ChittyChat_ReceiveMsgServer //gRPC server stream
-	clocks      []int32
+	Connection []*Connection
 }
 
-func (s *chittyChatServer) Join(ctx context.Context, user *pb.User) (*pb.JoinResponse, error) {
-	for _, _user := range s.usersInChat {
-		if user.Name == _user.Name {
-			return &pb.JoinResponse{Error: 1,
-					Msg: "User already exists"},
-				nil
-		}
+func (s *Server) CreateStream(pconn *pb.Connect, stream pb.ChittyChat_CreateStreamServer) error { // Once a user wants to connect, we create a stream object and add their usercredentials to it in a connection stuct
+	conn := &Connection{
+		stream: stream,
+		id:     pconn.User.Id,
+		active: true,
+		error:  make(chan error),
 	}
 
-	s.usersInChat = append(s.usersInChat, user)
-	return &pb.JoinResponse{Error: 0,
-			Msg: "Success"},
-		nil
+	s.Connection = append(s.Connection, conn) // connection is added to the server
+
+	return <-conn.error // channel any errors out
 }
 
-func (s *chittyChatServer) GetAllUsers(ctx context.Context, empty *pb.Empty) (*pb.UserList, error) {
-	return &pb.UserList{Users: s.usersInChat}, nil
-}
+func (s *Server) BroadcastMessage(ctx context.Context, msg *pb.ChatMessage) (*pb.Empty, error) {
+	wait := sync.WaitGroup{}
+	done := make(chan int)
 
-func (s *chittyChatServer) ReceiveMsg(empty *pb.Empty, stream pb.ChittyChat_ReceiveMsgServer) error { //recive msg from client
-	s.observers = append(s.observers, stream)
-	return nil
-}
+	for _, conn := range s.Connection {
+		wait.Add(1)
 
-func (s *chittyChatServer) SendMsg(ctx context.Context, chatMessage *pb.ChatMessage) (*pb.Empty, error) { //send all chat msgs to clients
-	log.Print(len(s.observers))
-	for _, observer := range s.observers {
+		go func(msg *pb.ChatMessage, conn *Connection) {
+			defer wait.Done()
 
-		err := observer.Send(chatMessage)
-		log.Print(err)
-		log.Print(chatMessage)
+			if conn.active {
+				err := conn.stream.Send(msg)
+				if err != nil {
+					conn.active = false
+					conn.error <- err
+				}
+			}
+		}(msg, conn)
 	}
+	go func() {
+		wait.Wait()
+		close(done)
+	}()
+	<-done
 	return &pb.Empty{}, nil
 }
 
 func main() {
-	lis, err := net.Listen("tcp", port)
+	//var connections []*Connection
+
+	//server := &Server{connections}
+
+	grpcServer := grpc.NewServer()
+	listener, err := net.Listen("tcp", port)
 
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-	s := grpc.NewServer()
-	pb.RegisterChittyChatServer(s, &chittyChatServer{})
-	log.Printf("server listening at %v", lis.Addr())
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		log.Fatalf("Error, couldn't create the server %v", err)
 	}
 
+	log.Printf("Starting server at port %v", port)
+
+	pb.RegisterChittyChatServer(grpcServer, &Server{})
+	grpcServer.Serve(listener)
 }
