@@ -13,7 +13,7 @@ message User {
 
 message ChatMessage {
     string id =  1;
-    User user = 2;
+    string from = 2;
     string chatmessage = 3;
     repeated int32 logicaltimes = 4;
 }

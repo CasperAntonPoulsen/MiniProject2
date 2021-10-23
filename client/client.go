@@ -45,7 +45,7 @@ func connect(user *pb.User) error {
 				streamerror = fmt.Errorf("error reading message: %v", err)
 				break
 			}
-			fmt.Printf("%v : %s\n", msg.Id, msg.Chatmessage)
+			fmt.Printf("%v %v : %s : %v\n", msg.Id, msg.From, msg.Chatmessage, msg.GetLogicaltimes())
 		}
 	}(stream)
 	return streamerror
@@ -55,7 +55,7 @@ func main() {
 	timestamp := time.Now()
 	done := make(chan int)
 
-	name := flag.String("N", "Anon", "The name of the user")
+	name := flag.String("Name", "Anon", "The name of the user")
 	flag.Parse()
 
 	id := sha256.Sum256([]byte(timestamp.String() + *name))
@@ -82,6 +82,7 @@ func main() {
 		for scanner.Scan() {
 			msg := &pb.ChatMessage{
 				Id:          user.Id,
+				From:        user.Name,
 				Chatmessage: scanner.Text(),
 			}
 
