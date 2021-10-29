@@ -9,13 +9,17 @@ package proto;
 message User {
     string id = 1;
     string name = 2;
+    int32 time = 3;
 }
 
 message ChatMessage {
     string id =  1;
     string from = 2;
     string chatmessage = 3;
-    repeated int32 logicaltimes = 4;
+    int32 clientTime = 4;
+    repeated int32 logicaltimes = 5;
+    int32 clientIndex = 6;
+  
 }
 
 message Connect {

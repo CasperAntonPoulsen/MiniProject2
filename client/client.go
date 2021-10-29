@@ -37,6 +37,7 @@ func connect(user *pb.User) error {
 		return fmt.Errorf("connection has failed: %v", err)
 	}
 	wait.Add(1)
+	//Recieve
 	go func(str pb.ChittyChat_CreateStreamClient) {
 		defer wait.Done()
 		for {
@@ -70,6 +71,7 @@ func main() {
 	user := &pb.User{
 		Id:   hex.EncodeToString(id[:]),
 		Name: *name,
+		Time: 1,
 	}
 
 	connect(user)
@@ -84,6 +86,7 @@ func main() {
 				Id:          user.Id,
 				From:        user.Name,
 				Chatmessage: scanner.Text(),
+				ClientTime:  user.Time,
 			}
 
 			_, err := client.BroadcastMessage(context.Background(), msg)
