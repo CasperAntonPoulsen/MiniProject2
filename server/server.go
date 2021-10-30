@@ -57,6 +57,8 @@ func (s *Server) BroadcastMessage(ctx context.Context, msg *pb.ChatMessage) (*pb
 	done := make(chan int)
 	times := s.CalculateTime(msg)
 	ClientIndex := 1
+	s.logicaltime += 1
+	times[0] += 1
 	for _, conn := range s.Connection {
 		wait.Add(1)
 
@@ -64,18 +66,12 @@ func (s *Server) BroadcastMessage(ctx context.Context, msg *pb.ChatMessage) (*pb
 			defer wait.Done()
 
 			if conn.active {
-				s.logicaltime += 1
-
-				mutex.Lock() // lock
-
-				times[0] += 1
 
 				msg.Logicaltimes = times
 
 				msg.ClientTime = int32(ClientIndex)
 				err := conn.stream.Send(msg)
 				if err != nil {
-					mutex.Unlock() //unlock
 					conn.active = false
 					conn.error <- err
 
@@ -89,8 +85,6 @@ func (s *Server) BroadcastMessage(ctx context.Context, msg *pb.ChatMessage) (*pb
 					return
 
 				}
-
-				mutex.Unlock() //unlock
 			}
 		}(msg, conn)
 		ClientIndex++
