@@ -12,8 +12,6 @@ import (
 
 const port = ":8080"
 
-var mutex sync.Mutex
-
 type Connection struct { // Creating a struct to contain each connection from clients
 	stream      pb.ChittyChat_CreateStreamServer // Each connection contains a stream object which is used to send the message during the broadcast function
 	id          string
@@ -59,8 +57,16 @@ func (s *Server) BroadcastMessage(ctx context.Context, msg *pb.ChatMessage) (*pb
 	ClientIndex := 1
 	s.logicaltime += 1
 	times[0] += 1
-	for _, conn := range s.Connection {
+	for i, conn := range s.Connection {
 		wait.Add(1)
+
+		if (i == int(msg.ClientIndex)) {
+			serverSideTime := times[i + 1]
+
+			if serverSideTime < msg.ClientTime {
+				times[i + 1] = msg.ClientTime
+			}
+		}
 
 		go func(msg *pb.ChatMessage, conn *Connection) {
 			defer wait.Done()

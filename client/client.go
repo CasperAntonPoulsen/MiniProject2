@@ -3,11 +3,14 @@ package main
 import (
 	"bufio"
 	"context"
+
+	//"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -46,7 +49,20 @@ func connect(user *pb.User) error {
 				streamerror = fmt.Errorf("error reading message: %v", err)
 				break
 			}
-			fmt.Printf("%v %v : %s : %v\n", msg.Id, msg.From, msg.Chatmessage, msg.GetLogicaltimes())
+
+			user.Time++
+
+			recvLogicalTimes := msg.GetLogicaltimes()
+
+			clientRecvTime := recvLogicalTimes[msg.GetClientIndex()]
+
+			if clientRecvTime > user.GetTime() {
+				user.Time = clientRecvTime
+			} else {
+				clientRecvTime = user.GetTime()
+			}
+
+			fmt.Printf("%v %v : %s : %v : %v\n", msg.Id, msg.From, msg.Chatmessage, recvLogicalTimes, user.Time)
 		}
 	}(stream)
 	return streamerror
@@ -82,6 +98,7 @@ func main() {
 
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
+			user.Time++
 			msg := &pb.ChatMessage{
 				Id:          user.Id,
 				From:        user.Name,
@@ -94,6 +111,15 @@ func main() {
 				fmt.Printf("error sending message: %v", err)
 				break
 			}
+		}
+	}()
+
+	go func() {
+		for {
+			if rand.Intn(10) < 3 {
+				user.Time++
+			}
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
